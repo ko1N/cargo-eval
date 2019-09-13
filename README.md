@@ -53,7 +53,7 @@ The following features are defined:
 <a name="shebang"></a>
 ### Self-Executing Scripts
 
-On UNIX systems, you can use `#!/usr/bin/env cargo eval --` as a shebang line in a Rust script.  If the script file is executable, this will allow you to execute a script file directly.
+On UNIX systems, you can use `#!/usr/bin/env -S cargo eval --` as a shebang line in a Rust script.  If the script file is executable, this will allow you to execute a script file directly.
 
 If you are using Windows, you can associate the `.crs` extension (which is simply a renamed `.rs` file) with `cargo-eval`.  This allows you to execute Rust scripts simply by naming them like any other executable or script.
 
@@ -86,7 +86,7 @@ The output of Cargo will be hidden unless compilation fails, or takes longer tha
 - `now.crs` (code block manifest with UNIX shebang and `.crs` extension):
 
     ```rust
-    #!/usr/bin/env cargo eval --
+    #!/usr/bin/env -S cargo eval --
     //! This is a regular crate doc comment, but it also contains a partial
     //! Cargo manifest.  Note the use of a *fenced* code block, and the
     //! `cargo` "language".
