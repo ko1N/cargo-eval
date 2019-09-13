@@ -11,13 +11,16 @@ As such, `cargo-eval` does two major things:
 */
 extern crate clap;
 extern crate env_logger;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate log;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[cfg(feature="chan")]
-#[macro_use] extern crate chan;
+#[cfg(feature = "chan")]
+#[macro_use]
+extern crate chan;
 
 /**
 If this is set to `true`, the digests used for package IDs will be replaced with "stub" to make testing a bit easier.  Obviously, you don't want this `true` for release...
@@ -27,16 +30,16 @@ const STUB_HASHES: bool = false;
 /**
 Length of time to suppress Cargo output.
 */
-#[cfg(feature="suppress-cargo-output")]
+#[cfg(feature = "suppress-cargo-output")]
 const CARGO_OUTPUT_TIMEOUT: u64 = 2_000/*ms*/;
 
+mod app;
 mod consts;
 mod error;
 mod manifest;
 mod platform;
 mod templates;
 mod util;
-mod app;
 
 #[cfg(windows)]
 mod file_assoc;
@@ -49,7 +52,7 @@ use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
 use crate::error::{Blame, MainError, Result};
-use crate::util::{Defer};
+use crate::util::Defer;
 
 #[derive(Debug)]
 enum SubCommand {
@@ -110,14 +113,13 @@ impl BuildKind {
             (false, false) => BuildKind::Normal,
             (true, false) => BuildKind::Test,
             (false, true) => BuildKind::Bench,
-            _ => panic!("got both test and bench")
+            _ => panic!("got both test and bench"),
         }
     }
 }
 
-
 fn parse_args() -> SubCommand {
-  use clap::{value_t, values_t};
+    use clap::{value_t, values_t};
 
     let m = app::get_matches();
 
@@ -125,7 +127,8 @@ fn parse_args() -> SubCommand {
         return self::SubCommand::Templates(templates::Args::parse(m));
     }
 
-    #[cfg(windows)] {
+    #[cfg(windows)]
+    {
         if let Some(m) = m.subcommand_matches("file-association") {
             return self::SubCommand::FileAssoc(file_assoc::Args::parse(m));
         }
@@ -135,7 +138,7 @@ fn parse_args() -> SubCommand {
         v.map(|v| match v {
             "yes" => true,
             "no" => false,
-            _ => unreachable!()
+            _ => unreachable!(),
         })
     }
 
@@ -171,11 +174,11 @@ fn main() {
         Ok(0) => (),
         Ok(code) => {
             std::process::exit(code);
-        },
+        }
         Err(ref err) if err.is_human() => {
             writeln!(stderr, "error: {}", err).unwrap();
             std::process::exit(1);
-        },
+        }
         Err(ref err) => {
             writeln!(stderr, "internal error: {}", err).unwrap();
             std::process::exit(1);
@@ -227,9 +230,10 @@ fn try_main() -> Result<i32> {
     let input = match (&args.script, args.expr, args.loop_) {
         (Some(script), false, false) => {
             let (path, mut file) = find_script(&script)
-              .ok_or_else(|| format!("could not find script '{}'", script))?;
+                .ok_or_else(|| format!("could not find script '{}'", script))?;
 
-            script_name = path.file_stem()
+            script_name = path
+                .file_stem()
                 .map(|os| os.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "unknown".into());
 
@@ -242,15 +246,15 @@ fn try_main() -> Result<i32> {
             content = body;
 
             Input::File(&script_name, &script_path, &content, mtime)
-        },
+        }
         (Some(expr), true, false) => {
             content = expr.clone();
             Input::Expr(&content, args.template.as_ref().map(|s| &**s))
-        },
+        }
         (Some(loop_), false, true) => {
             content = loop_.clone();
             Input::Loop(&content, args.count)
-        },
+        }
         _ => unreachable!(),
     };
     info!("input: {:?}", input);
@@ -263,21 +267,24 @@ fn try_main() -> Result<i32> {
     - Expand `pkg` into `pkg=*`.
     */
     let deps = {
-        use std::collections::HashMap;
         use std::collections::hash_map::Entry::{Occupied, Vacant};
+        use std::collections::HashMap;
 
         let mut deps: HashMap<String, String> = HashMap::new();
         for dep in args.dep.iter().cloned() {
             // Append '=*' if it needs it.
             let dep = match dep.find('=') {
                 Some(_) => dep,
-                None => dep + "=*"
+                None => dep + "=*",
             };
 
             let mut parts = dep.splitn(2, '=');
             let name = parts.next().expect("dependency is missing name");
             let version = parts.next().expect("dependency is missing version");
-            assert!(parts.next().is_none(), "dependency somehow has three parts?!");
+            assert!(
+                parts.next().is_none(),
+                "dependency somehow has three parts?!"
+            );
 
             if name == "" {
                 return Err((Blame::Human, "cannot have empty dependency package name").into());
@@ -290,14 +297,19 @@ fn try_main() -> Result<i32> {
             match deps.entry(name.into()) {
                 Vacant(ve) => {
                     ve.insert(version.into());
-                },
+                }
                 Occupied(oe) => {
                     // This is *only* a problem if the versions don't match.  We won't try to do anything clever in terms of upgrading or resolving or anything... exact match or go home.
                     let existing = oe.get();
                     if version != existing {
-                        return Err((Blame::Human,
-                            format!("conflicting versions for dependency '{}': '{}', '{}'",
-                                name, existing, version)).into());
+                        return Err((
+                            Blame::Human,
+                            format!(
+                                "conflicting versions for dependency '{}': '{}', '{}'",
+                                name, existing, version
+                            ),
+                        )
+                            .into());
                     }
                 }
             }
@@ -314,7 +326,9 @@ fn try_main() -> Result<i32> {
     Generate the prelude items, if we need any.  Again, ensure consistent and *valid* sorting.
     */
     let prelude_items = {
-        let unstable_features = args.unstable_features.iter()
+        let unstable_features = args
+            .unstable_features
+            .iter()
             .map(|uf| format!("#![feature({})]", uf));
 
         let mut items: Vec<_> = unstable_features.collect();
@@ -324,12 +338,7 @@ fn try_main() -> Result<i32> {
     info!("prelude_items: {:?}", prelude_items);
 
     // Work out what to do.
-    let action = decide_action_for(
-        &input,
-        deps,
-        prelude_items,
-        &args,
-    )?;
+    let action = decide_action_for(&input, deps, prelude_items, &args)?;
     info!("action: {:?}", action);
 
     gen_pkg_and_compile(&input, &action)?;
@@ -348,9 +357,14 @@ fn try_main() -> Result<i32> {
 
     // Run it!
     if action.execute {
-        fn hint<F: FnOnce(&mut Command) -> &mut Command>(f: F) -> F { f }
+        fn hint<F: FnOnce(&mut Command) -> &mut Command>(f: F) -> F {
+            f
+        }
         let add_env = hint(move |cmd| {
-            cmd.env("CARGO_EVAL_SCRIPT_PATH", input.path().unwrap_or_else(|| Path::new("")));
+            cmd.env(
+                "CARGO_EVAL_SCRIPT_PATH",
+                input.path().unwrap_or_else(|| Path::new("")),
+            );
             cmd.env("CARGO_EVAL_SAFE_NAME", input.safe_name());
             cmd.env("CARGO_EVAL_PKG_NAME", input.package_name());
             cmd.env("CARGO_EVAL_BASE_PATH", input.base_path());
@@ -364,11 +378,10 @@ fn try_main() -> Result<i32> {
                 let mut cmd = Command::new(exe_path);
                 cmd.args(&args.args);
                 add_env(&mut cmd);
-                cmd.status()
-                    .map(|st| st.code().unwrap_or(1))
+                cmd.status().map(|st| st.code().unwrap_or(1))
             }? {
                 0 => (),
-                n => return Ok(n)
+                n => return Ok(n),
             }
         } else {
             let cmd_name = action.build_kind.exec_command();
@@ -377,7 +390,7 @@ fn try_main() -> Result<i32> {
             add_env(&mut cmd);
             match cmd.status().map(|st| st.code().unwrap_or(1))? {
                 0 => (),
-                n => return Ok(n)
+                n => return Ok(n),
             }
         }
     }
@@ -410,13 +423,15 @@ fn clean_cache(max_age: u128) -> Result<()> {
     let cache_dir = script_cache_path();
 
     if !cache_dir.is_dir() {
-      return Ok(())
+        return Ok(());
     }
 
     for child in fs::read_dir(cache_dir)? {
         let child = child?;
         let path = child.path();
-        if path.is_file() { continue }
+        if path.is_file() {
+            continue;
+        }
 
         info!("checking: {:?}", path);
 
@@ -434,7 +449,7 @@ fn clean_cache(max_age: u128) -> Result<()> {
                     Ok(file) => file,
                     Err(..) => {
                         info!("couldn't open metadata for {:?}", path);
-                        return true
+                        return true;
                     }
                 };
                 platform::file_last_modified(&meta_file)
@@ -460,10 +475,7 @@ Generate and compile a package from the input.
 
 Why take `PackageMetadata`?  To ensure that any information we need to depend on for compilation *first* passes through `decide_action_for` *and* is less likely to not be serialised with the rest of the metadata.
 */
-fn gen_pkg_and_compile(
-    input: &Input,
-    action: &InputAction,
-) -> Result<()> {
+fn gen_pkg_and_compile(input: &Input, action: &InputAction) -> Result<()> {
     let pkg_path = &action.pkg_path;
     let meta = &action.metadata;
     let old_meta = action.old_metadata.as_ref();
@@ -492,7 +504,7 @@ fn gen_pkg_and_compile(
             FileOverwrite::Same => (),
             FileOverwrite::Changed { new_hash } => {
                 meta.manifest_hash = new_hash;
-            },
+            }
         }
         mani_path
     };
@@ -512,7 +524,7 @@ fn gen_pkg_and_compile(
             FileOverwrite::Same => (),
             FileOverwrite::Changed { new_hash } => {
                 meta.script_hash = new_hash;
-            },
+            }
         }
     }
 
@@ -530,40 +542,52 @@ fn gen_pkg_and_compile(
     let mut compile_err = Ok(());
     if action.compile {
         info!("compiling...");
-        let mut cmd = cargo("build", &*mani_path.to_string_lossy(), action.use_bincache, &meta)?;
+        let mut cmd = cargo(
+            "build",
+            &*mani_path.to_string_lossy(),
+            action.use_bincache,
+            &meta,
+        )?;
 
-        #[cfg(feature="suppress-cargo-output")]
+        #[cfg(feature = "suppress-cargo-output")]
         macro_rules! get_status {
             ($cmd:expr) => {
-              util::suppress_child_output(
-                &mut $cmd,
-                ::std::time::Duration::from_millis(CARGO_OUTPUT_TIMEOUT)
-              )?.status()
-            }
+                util::suppress_child_output(
+                    &mut $cmd,
+                    ::std::time::Duration::from_millis(CARGO_OUTPUT_TIMEOUT),
+                )?
+                .status()
+            };
         }
 
-        #[cfg(not(feature="suppress-cargo-output"))]
+        #[cfg(not(feature = "suppress-cargo-output"))]
         macro_rules! get_status {
             ($cmd:expr) => {
                 $cmd.status()
-            }
+            };
         }
 
-        compile_err = get_status!(cmd).map_err(Into::<MainError>::into)
-            .and_then(|st|
-                match st.code() {
-                    Some(0) => Ok(()),
-                    Some(st) => Err(format!("cargo failed with status {}", st).into()),
-                    None => Err("cargo failed".into())
-                });
+        compile_err = get_status!(cmd)
+            .map_err(Into::<MainError>::into)
+            .and_then(|st| match st.code() {
+                Some(0) => Ok(()),
+                Some(st) => Err(format!("cargo failed with status {}", st).into()),
+                None => Err("cargo failed".into()),
+            });
 
         // Drop out now if compilation failed.
         if let Err(err) = compile_err {
-          return Err(err)
+            return Err(err);
         }
 
         // Find out and cache what the executable was called.
-        let _ = cargo_target(input, pkg_path, &*mani_path.to_string_lossy(), action.use_bincache, &meta)?;
+        let _ = cargo_target(
+            input,
+            pkg_path,
+            &*mani_path.to_string_lossy(),
+            action.use_bincache,
+            &meta,
+        )?;
 
         if action.use_bincache {
             // Write out the metadata hash to tie this executable to a particular chunk of metadata.  This is to avoid issues with multiple scripts with the same name being compiled to a common target directory.
@@ -643,7 +667,12 @@ impl InputAction {
     }
 
     fn cargo(&self, cmd: &str) -> Result<Command> {
-        cargo(cmd, &*self.manifest_path().to_string_lossy(), self.use_bincache, &self.metadata)
+        cargo(
+            cmd,
+            &*self.manifest_path().to_string_lossy(),
+            self.use_bincache,
+            &self.metadata,
+        )
     }
 }
 
@@ -699,15 +728,17 @@ fn decide_action_for(
     prelude: Vec<String>,
     args: &Args,
 ) -> Result<InputAction> {
-    let (pkg_path, using_cache) = args.pkg_path.as_ref().map(|p| (p.into(), false))
+    let (pkg_path, using_cache) = args
+        .pkg_path
+        .as_ref()
+        .map(|p| (p.into(), false))
         .unwrap_or_else(|| {
             // This can't fail.  Seriously, we're *fucked* if we can't work this out.
             let cache_path = script_cache_path();
             info!("cache_path: {:?}", cache_path);
 
             let id = {
-                let deps_iter = deps.iter()
-                    .map(|&(ref n, ref v)| (n as &str, v as &str));
+                let deps_iter = deps.iter().map(|&(ref n, ref v)| (n as &str, v as &str));
 
                 // Again, also fucked if we can't work this out.
                 input.compute_id(deps_iter).unwrap()
@@ -732,12 +763,11 @@ fn decide_action_for(
     // Construct input metadata.
     let input_meta = {
         let (path, mtime, template) = match *input {
-            Input::File(_, path, _, mtime)
-                => (Some(path.to_string_lossy().into_owned()), Some(mtime), None),
-            Input::Expr(_, template)
-                => (None, None, template),
-            Input::Loop(..)
-                => (None, None, None)
+            Input::File(_, path, _, mtime) => {
+                (Some(path.to_string_lossy().into_owned()), Some(mtime), None)
+            }
+            Input::Expr(_, template) => (None, None, template),
+            Input::Loop(..) => (None, None, None),
         };
         PackageMetadata {
             path,
@@ -856,7 +886,9 @@ Figures out where the output executable for the input should be.
 This *requires* that `cargo_target` has already been called on the package.
 */
 fn get_exe_path<P>(build_kind: BuildKind, pkg_path: P) -> Result<PathBuf>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     use std::fs::File;
 
     // We don't directly run tests and benchmarks.
@@ -864,7 +896,7 @@ where P: AsRef<Path> {
         BuildKind::Normal => (),
         BuildKind::Test | BuildKind::Bench => {
             return Err("tried to get executable path for test/bench build".into());
-        },
+        }
     }
 
     let package_path = pkg_path.as_ref();
@@ -880,7 +912,9 @@ where P: AsRef<Path> {
 Figures out where the `meta-hash` file should be.
 */
 fn get_meta_hash_path<P>(use_bincache: bool, pkg_path: P) -> Result<PathBuf>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     if !use_bincache {
         panic!("tried to get meta-hash path when not using binary cache");
     }
@@ -891,7 +925,9 @@ where P: AsRef<Path> {
 Load the package metadata, given the path to the package's cache folder.
 */
 fn get_pkg_metadata<P>(pkg_path: P) -> Result<PackageMetadata>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     let meta_path = get_pkg_metadata_path(pkg_path);
     debug!("meta_path: {:?}", meta_path);
     let mut meta_file = fs::File::open(&meta_path)?;
@@ -901,8 +937,7 @@ where P: AsRef<Path> {
         meta_file.read_to_string(&mut s).unwrap();
         s
     };
-    let meta: PackageMetadata = serde_json::from_str(&meta_str)
-        .map_err(|err| err.to_string())?;
+    let meta: PackageMetadata = serde_json::from_str(&meta_str).map_err(|err| err.to_string())?;
 
     Ok(meta)
 }
@@ -911,7 +946,9 @@ where P: AsRef<Path> {
 Work out the path to a package's metadata file.
 */
 fn get_pkg_metadata_path<P>(pkg_path: P) -> PathBuf
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     pkg_path.as_ref().join("metadata.json")
 }
 
@@ -919,12 +956,13 @@ where P: AsRef<Path> {
 Save the package metadata, given the path to the package's cache folder.
 */
 fn write_pkg_metadata<P>(pkg_path: P, meta: &PackageMetadata) -> Result<()>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     let meta_path = get_pkg_metadata_path(pkg_path);
     debug!("meta_path: {:?}", meta_path);
     let mut meta_file = fs::File::create(&meta_path)?;
-    let meta_str = serde_json::to_string(meta)
-        .map_err(|err| err.to_string())?;
+    let meta_str = serde_json::to_string(meta).map_err(|err| err.to_string())?;
     write!(&mut meta_file, "{}", meta_str)?;
     meta_file.flush()?;
     Ok(())
@@ -934,21 +972,23 @@ where P: AsRef<Path> {
 Returns the path to the cache directory.
 */
 fn script_cache_path() -> PathBuf {
-  app::cache_dir().unwrap().join("scripts")
+    app::cache_dir().unwrap().join("scripts")
 }
 
 /**
 Returns the path to the binary cache directory.
 */
 fn binary_cache_path() -> PathBuf {
-  app::cache_dir().unwrap().join("bin")
+    app::cache_dir().unwrap().join("bin")
 }
 
 /**
 Attempts to locate the script specified by the given path.  If the path as-given doesn't yield anything, it will try adding file extensions.
 */
 fn find_script<P>(path: P) -> Option<(PathBuf, fs::File)>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     let path = path.as_ref();
 
     // Try the path directly.
@@ -1041,15 +1081,10 @@ impl<'a> Input<'a> {
                 (0, '0'..='9') => {
                     r.push('_');
                     r.push(c);
-                },
-                (_, '0'..='9')
-                | (_, 'a'..='z')
-                | (_, 'A'..='Z')
-                | (_, '_')
-                | (_, '-')
-                => {
+                }
+                (_, '0'..='9') | (_, 'a'..='z') | (_, 'A'..='Z') | (_, '_') | (_, '-') => {
                     r.push(c);
-                },
+                }
                 (_, _) => {
                     r.push('_');
                 }
@@ -1064,8 +1099,13 @@ impl<'a> Input<'a> {
     */
     pub fn base_path(&self) -> PathBuf {
         match *self {
-            Input::File(_, path, _, _) => path.parent().expect("couldn't get parent directory for file input base path").into(),
-            Input::Expr(..) | Input::Loop(..) => std::env::current_dir().expect("couldn't get current directory for input base path"),
+            Input::File(_, path, _, _) => path
+                .parent()
+                .expect("couldn't get parent directory for file input base path")
+                .into(),
+            Input::Expr(..) | Input::Loop(..) => {
+                std::env::current_dir().expect("couldn't get current directory for input base path")
+            }
         }
     }
 
@@ -1073,7 +1113,9 @@ impl<'a> Input<'a> {
     Compute the package ID for the input.  This is used as the name of the cache folder into which the Cargo package will be generated.
     */
     pub fn compute_id<'dep, DepIt>(&self, deps: DepIt) -> Result<OsString>
-    where DepIt: IntoIterator<Item=(&'dep str, &'dep str)> {
+    where
+        DepIt: IntoIterator<Item = (&'dep str, &'dep str)>,
+    {
         use shaman::digest::Digest;
         use shaman::sha1::Sha1;
         use Input::*;
@@ -1105,7 +1147,7 @@ impl<'a> Input<'a> {
                 id.push("-");
                 id.push(if STUB_HASHES { "stub" } else { &*digest });
                 Ok(id)
-            },
+            }
             Expr(content, template) => {
                 let mut hasher = hash_deps();
 
@@ -1121,7 +1163,7 @@ impl<'a> Input<'a> {
                 id.push("expr-");
                 id.push(if STUB_HASHES { "stub" } else { &*digest });
                 Ok(id)
-            },
+            }
             Loop(content, count) => {
                 let mut hasher = hash_deps();
 
@@ -1137,7 +1179,7 @@ impl<'a> Input<'a> {
                 id.push("loop-");
                 id.push(if STUB_HASHES { "stub" } else { &*digest });
                 Ok(id)
-            },
+            }
         }
     }
 }
@@ -1162,7 +1204,9 @@ enum FileOverwrite {
 Overwrite a file if and only if the contents have changed.
 */
 fn overwrite_file<P>(path: P, content: &str, hash: Option<&str>) -> Result<FileOverwrite>
-where P: AsRef<Path> {
+where
+    P: AsRef<Path>,
+{
     debug!("overwrite_file({:?}, _, {:?})", path.as_ref(), hash);
     let new_hash = hash_str(content);
     if Some(&*new_hash) == hash {
@@ -1180,10 +1224,14 @@ where P: AsRef<Path> {
 /**
 Constructs a Cargo command that runs on the script package.
 */
-fn cargo(cmd_name: &str, manifest: &str, use_bincache: bool, meta: &PackageMetadata) -> Result<Command> {
+fn cargo(
+    cmd_name: &str,
+    manifest: &str,
+    use_bincache: bool,
+    meta: &PackageMetadata,
+) -> Result<Command> {
     let mut cmd = Command::new("cargo");
-    cmd.arg(cmd_name)
-        .arg("--manifest-path").arg(manifest);
+    cmd.arg(cmd_name).arg("--manifest-path").arg(manifest);
 
     if platform::force_cargo_color() {
         cmd.arg("--color").arg("always");
@@ -1210,9 +1258,22 @@ Tries to find the path to a package's target file.
 
 This will also cache this information such that `exe_path` can find it later.
 */
-fn cargo_target<P>(input: &Input, pkg_path: P, manifest: &str, use_bincache: bool, meta: &PackageMetadata) -> Result<PathBuf>
-where P: AsRef<Path> {
-    trace!("cargo_target(_, {:?}, {:?}, {:?}, _)", pkg_path.as_ref(), manifest, use_bincache);
+fn cargo_target<P>(
+    input: &Input,
+    pkg_path: P,
+    manifest: &str,
+    use_bincache: bool,
+    meta: &PackageMetadata,
+) -> Result<PathBuf>
+where
+    P: AsRef<Path>,
+{
+    trace!(
+        "cargo_target(_, {:?}, {:?}, {:?}, _)",
+        pkg_path.as_ref(),
+        manifest,
+        use_bincache
+    );
 
     let exe_path = cargo_target_by_message(input, manifest, use_bincache, meta)?;
 
@@ -1234,10 +1295,19 @@ where P: AsRef<Path> {
 }
 
 // Gets the path to the package's target file by parsing the output of `cargo build`.
-fn cargo_target_by_message(input: &Input, manifest: &str, use_bincache: bool, meta: &PackageMetadata) -> Result<PathBuf> {
+fn cargo_target_by_message(
+    input: &Input,
+    manifest: &str,
+    use_bincache: bool,
+    meta: &PackageMetadata,
+) -> Result<PathBuf> {
     use std::io::{BufRead, BufReader};
 
-    trace!("cargo_target_by_message(_, {:?}, {:?}, _)", manifest, use_bincache);
+    trace!(
+        "cargo_target_by_message(_, {:?}, {:?}, _)",
+        manifest,
+        use_bincache
+    );
 
     let mut cmd = cargo("build", manifest, use_bincache, meta)?;
     cmd.arg("--message-format=json");
@@ -1255,27 +1325,35 @@ fn cargo_target_by_message(input: &Input, manifest: &str, use_bincache: bool, me
 
     #[derive(Deserialize)]
     struct Target {
-      name: String,
+        name: String,
     }
 
     #[derive(Deserialize)]
     struct Line {
-      reason: String,
-      target: Target,
-      filenames: Vec<PathBuf>,
+        reason: String,
+        target: Target,
+        filenames: Vec<PathBuf>,
     }
 
     while let Some(Ok(line)) = lines.next() {
         if let Ok(mut l) = serde_json::from_str::<Line>(&line).map_err(Box::new) {
-          if l.reason == "compiler-artifact" && l.target.name == package_name {
-            let _ = child.kill();
-            return Ok(l.filenames.swap_remove(0))
-          }
+            if l.reason == "compiler-artifact" && l.target.name == package_name {
+                let _ = child.kill();
+                return Ok(l.filenames.swap_remove(0));
+            }
         }
     }
 
     match child.wait()?.code() {
-        Some(st) => Err(format!("could not determine target filename: cargo exited with status {}", st).into()),
-        None => Err("could not determine target filename: cargo exited abnormally".to_string().into()),
+        Some(st) => Err(format!(
+            "could not determine target filename: cargo exited with status {}",
+            st
+        )
+        .into()),
+        None => Err(
+            "could not determine target filename: cargo exited abnormally"
+                .to_string()
+                .into(),
+        ),
     }
 }

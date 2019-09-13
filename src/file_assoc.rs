@@ -5,7 +5,7 @@ use std::io;
 
 use clap;
 use itertools::Itertools;
-use winreg::{RegKey, enums as wre};
+use winreg::{enums as wre, RegKey};
 
 use crate::error::{Blame, Result};
 
@@ -36,13 +36,11 @@ impl Args {
 
     pub fn parse(m: &clap::ArgMatches) -> Self {
         match m.subcommand() {
-            ("install", Some(m)) => {
-                Args::Install {
-                    amend_pathext: m.is_present("amend_pathext"),
-                }
+            ("install", Some(m)) => Args::Install {
+                amend_pathext: m.is_present("amend_pathext"),
             },
             ("uninstall", _) => Args::Uninstall,
-            (name, _) => panic!("bad subcommand: {:?}", name)
+            (name, _) => panic!("bad subcommand: {:?}", name),
         }
     }
 }
@@ -88,7 +86,9 @@ fn install(amend_pathext: bool) -> Result<()> {
         Ok(()) => (),
         Err(e) => {
             if e.kind() == io::ErrorKind::PermissionDenied {
-                println!("Access denied.  Make sure you run this command from an administrator prompt.");
+                println!(
+                    "Access denied.  Make sure you run this command from an administrator prompt."
+                );
                 return Err((Blame::Human, e).into());
             } else {
                 return Err(e.into());
@@ -102,7 +102,8 @@ fn install(amend_pathext: bool) -> Result<()> {
     // Amend PATHEXT.
     if amend_pathext {
         let hklm = RegKey::predef(wre::HKEY_LOCAL_MACHINE);
-        let env = hklm.open_subkey(r#"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"#)?;
+        let env =
+            hklm.open_subkey(r#"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"#)?;
 
         let pathext: String = env.get_value("PATHEXT")?;
         if !pathext.split(';').any(|e| e.eq_ignore_ascii_case(".crs")) {
@@ -110,28 +111,37 @@ fn install(amend_pathext: bool) -> Result<()> {
             env.set_value("PATHEXT", &pathext)?;
         }
 
-        println!("Added `.crs` to PATHEXT.  You may need to log out for the change to take effect.");
+        println!(
+            "Added `.crs` to PATHEXT.  You may need to log out for the change to take effect."
+        );
     }
 
     Ok(())
 }
 
 fn uninstall() -> Result<()> {
-  let hlcr = RegKey::predef(wre::HKEY_CLASSES_ROOT);
-  hlcr.delete_subkey(r#"CargoScript.Crs\shell\open\command"#).ignore_missing()?;
-  hlcr.delete_subkey(r#"CargoScript.Crs\shell\open"#).ignore_missing()?;
-  hlcr.delete_subkey(r#"CargoScript.Crs\shell"#).ignore_missing()?;
-  hlcr.delete_subkey(r#"CargoScript.Crs"#).ignore_missing()?;
+    let hlcr = RegKey::predef(wre::HKEY_CLASSES_ROOT);
+    hlcr.delete_subkey(r#"CargoScript.Crs\shell\open\command"#)
+        .ignore_missing()?;
+    hlcr.delete_subkey(r#"CargoScript.Crs\shell\open"#)
+        .ignore_missing()?;
+    hlcr.delete_subkey(r#"CargoScript.Crs\shell"#)
+        .ignore_missing()?;
+    hlcr.delete_subkey(r#"CargoScript.Crs"#).ignore_missing()?;
 
     println!("Deleted cargo-eval registry entry.");
 
     {
         let hklm = RegKey::predef(wre::HKEY_LOCAL_MACHINE);
-        let env = hklm.open_subkey(r#"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"#)?;
+        let env =
+            hklm.open_subkey(r#"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"#)?;
 
         let pathext: String = env.get_value("PATHEXT")?;
         if pathext.split(';').any(|e| e.eq_ignore_ascii_case(".crs")) {
-            let pathext = pathext.split(';').filter(|e| !e.eq_ignore_ascii_case(".crs")).join(";");
+            let pathext = pathext
+                .split(';')
+                .filter(|e| !e.eq_ignore_ascii_case(".crs"))
+                .join(";");
             env.set_value("PATHEXT", &pathext)?;
             println!("Removed `.crs` from PATHEXT.  You may need to log out for the change to take effect.");
         }
@@ -141,17 +151,17 @@ fn uninstall() -> Result<()> {
 }
 
 trait IgnoreMissing {
-  fn ignore_missing(self) -> Self;
+    fn ignore_missing(self) -> Self;
 }
 
 impl IgnoreMissing for io::Result<()> {
-  fn ignore_missing(self) -> Self {
-    if let Err(ref e) = self {
-      if e.kind() == io::ErrorKind::NotFound {
-        return Ok(())
-      }
-    }
+    fn ignore_missing(self) -> Self {
+        if let Err(ref e) = self {
+            if e.kind() == io::ErrorKind::NotFound {
+                return Ok(());
+            }
+        }
 
-    self
-  }
+        self
+    }
 }

@@ -4,7 +4,7 @@ This module is concerned with how `cargo-eval` extracts the manfiest from a scri
 use std::collections::HashMap;
 use std::path::Path;
 
-use pulldown_cmark::{Parser, Options, Event, Tag};
+use pulldown_cmark::{Event, Options, Parser, Tag};
 use regex::Regex;
 use toml;
 
@@ -13,8 +13,8 @@ use crate::templates;
 use crate::Input;
 
 lazy_static! {
-    static ref RE_SHORT_MANIFEST: Regex = Regex::new(
-        r"^(?i)\s*//\s*cargo-deps\s*:(.*?)(\r\n|\n)").unwrap();
+    static ref RE_SHORT_MANIFEST: Regex =
+        Regex::new(r"^(?i)\s*//\s*cargo-deps\s*:(.*?)(\r\n|\n)").unwrap();
     static ref RE_MARGIN: Regex = Regex::new(r"^\s*\*( |$)").unwrap();
     static ref RE_SPACE: Regex = Regex::new(r"^(\s+)").unwrap();
     static ref RE_NESTING: Regex = Regex::new(r"/\*|\*/").unwrap();
@@ -36,33 +36,45 @@ Splits input into a complete Cargo manifest and unadultered Rust source.
 
 Unless we have prelude items to inject, in which case it will be *slightly* adulterated.
 */
-pub fn split_input(input: &Input, deps: &[(String, String)], prelude_items: &[String]) -> Result<(String, String)> {
+pub fn split_input(
+    input: &Input,
+    deps: &[(String, String)],
+    prelude_items: &[String],
+) -> Result<(String, String)> {
     let template_buf;
     let (part_mani, source, template, sub_prelude) = match *input {
         Input::File(_, _, content, _) => {
             assert_eq!(prelude_items.len(), 0);
             let content = strip_hashbang(content).trim_end();
-            let (manifest, source) = find_embedded_manifest(content)
-                .unwrap_or((Manifest::Toml(""), content));
+            let (manifest, source) =
+                find_embedded_manifest(content).unwrap_or((Manifest::Toml(""), content));
 
             (manifest, source, templates::get_template("file")?, false)
-        },
-        Input::Expr("meaning-of-life", None) | Input::Expr("meaning_of_life", None) => {
-            (Manifest::Toml(""), r#"
+        }
+        Input::Expr("meaning-of-life", None) | Input::Expr("meaning_of_life", None) => (
+            Manifest::Toml(""),
+            r#"
                 println!("42");
                 std::process::exit(42);
-            "#, templates::get_template("expr")?, true)
-        },
+            "#,
+            templates::get_template("expr")?,
+            true,
+        ),
         Input::Expr(content, template) => {
             template_buf = templates::get_template(template.unwrap_or("expr"))?;
             let (manifest, template_src) = find_embedded_manifest(&template_buf)
                 .unwrap_or((Manifest::Toml(""), &template_buf));
             (manifest, content, template_src.into(), true)
-        },
+        }
         Input::Loop(content, count) => {
             let templ = if count { "loop-count" } else { "loop" };
-            (Manifest::Toml(""), content, templates::get_template(templ)?, true)
-        },
+            (
+                Manifest::Toml(""),
+                content,
+                templates::get_template(templ)?,
+                true,
+            )
+        }
     };
 
     let mut prelude_str;
@@ -70,10 +82,8 @@ pub fn split_input(input: &Input, deps: &[(String, String)], prelude_items: &[St
     subs.insert("script", &source[..]);
 
     if sub_prelude {
-        prelude_str = String::with_capacity(prelude_items
-            .iter()
-            .map(|i| i.len() + 1)
-            .sum::<usize>());
+        prelude_str =
+            String::with_capacity(prelude_items.iter().map(|i| i.len() + 1).sum::<usize>());
         for i in prelude_items {
             prelude_str.push_str(i);
             prelude_str.push_str("\n");
@@ -109,7 +119,9 @@ pub fn split_input(input: &Input, deps: &[(String, String)], prelude_items: &[St
 #[test]
 fn test_split_input() {
     macro_rules! si {
-        ($i:expr) => (split_input(&$i, &[], &[]).ok())
+        ($i:expr) => {
+            split_input(&$i, &[], &[]).ok()
+        };
     }
 
     let dummy_path: ::std::path::PathBuf = "p".into();
@@ -117,14 +129,15 @@ fn test_split_input() {
     let f = |c| Input::File("n", &dummy_path, c, 0);
 
     macro_rules! r {
-        ($m:expr, $r:expr) => (Some(($m.into(), $r.into())));
+        ($m:expr, $r:expr) => {
+            Some(($m.into(), $r.into()))
+        };
     }
 
-    assert_eq!(si!(f(
-r#"fn main() {}"#
-        )),
+    assert_eq!(
+        si!(f(r#"fn main() {}"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -136,19 +149,18 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"fn main() {}"#
+            r#"fn main() {}"#
         )
     );
 
     // Ensure removed prefix manifests don't work.
-    assert_eq!(si!(f(
-r#"
+    assert_eq!(
+        si!(f(r#"
 ---
 fn main() {}
-"#
-        )),
+"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -160,21 +172,20 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"
+            r#"
 ---
 fn main() {}"#
         )
     );
 
-    assert_eq!(si!(f(
-r#"[dependencies]
+    assert_eq!(
+        si!(f(r#"[dependencies]
 time="0.1.25"
 ---
 fn main() {}
-"#
-        )),
+"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -186,21 +197,20 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"[dependencies]
+            r#"[dependencies]
 time="0.1.25"
 ---
 fn main() {}"#
         )
     );
 
-    assert_eq!(si!(f(
-r#"
+    assert_eq!(
+        si!(f(r#"
 // Cargo-Deps: time="0.1.25"
 fn main() {}
-"#
-        )),
+"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -213,20 +223,19 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"
+            r#"
 // Cargo-Deps: time="0.1.25"
 fn main() {}"#
         )
     );
 
-    assert_eq!(si!(f(
-r#"
+    assert_eq!(
+        si!(f(r#"
 // Cargo-Deps: time="0.1.25", libc="0.2.5"
 fn main() {}
-"#
-        )),
+"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -240,14 +249,14 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"
+            r#"
 // Cargo-Deps: time="0.1.25", libc="0.2.5"
 fn main() {}"#
         )
     );
 
-    assert_eq!(si!(f(
-r#"
+    assert_eq!(
+        si!(f(r#"
 /*!
 Here is a manifest:
 
@@ -257,10 +266,9 @@ time = "0.1.25"
 ```
 */
 fn main() {}
-"#
-        )),
+"#)),
         r!(
-r#"[[bin]]
+            r#"[[bin]]
 name = "n"
 path = "n.rs"
 
@@ -273,7 +281,7 @@ edition = "2018"
 name = "n"
 version = "0.1.0"
 "#,
-r#"
+            r#"
 /*!
 Here is a manifest:
 
@@ -293,29 +301,39 @@ Returns a slice of the input string with the leading hashbang, if there is one, 
 fn strip_hashbang(s: &str) -> &str {
     match RE_HASHBANG.find(s) {
         Some(m) => &s[m.end()..],
-        None => s
+        None => s,
     }
 }
 
 #[test]
 fn test_strip_hashbang() {
-    assert_eq!(strip_hashbang("\
+    assert_eq!(
+        strip_hashbang(
+            "\
 #!/usr/bin/env cargo eval --
 and the rest
 \
-        "), "\
+        "
+        ),
+        "\
 and the rest
 \
-        ");
-    assert_eq!(strip_hashbang("\
+        "
+    );
+    assert_eq!(
+        strip_hashbang(
+            "\
 #![thingy]
 and the rest
 \
-        "), "\
+        "
+        ),
+        "\
 #![thingy]
 and the rest
 \
-        ");
+        "
+    );
 }
 
 /**
@@ -336,10 +354,10 @@ impl<'s> Manifest<'s> {
     pub fn into_toml(self) -> Result<toml::value::Table> {
         use self::Manifest::*;
         match self {
-            Toml(s) => Ok(toml::from_str(s)
-                .map_err(|_| "could not parse embedded manifest")?),
-            TomlOwned(ref s) => Ok(toml::from_str(&s)
-                .map_err(|_| "could not parse embedded manifest")?),
+            Toml(s) => Ok(toml::from_str(s).map_err(|_| "could not parse embedded manifest")?),
+            TomlOwned(ref s) => {
+                Ok(toml::from_str(&s).map_err(|_| "could not parse embedded manifest")?)
+            }
             DepList(s) => Manifest::dep_list_to_toml(s),
         }
     }
@@ -350,16 +368,15 @@ impl<'s> Manifest<'s> {
         for dep in s.trim().split(',') {
             // If there's no version specified, add one.
             if dep.contains('=') {
-              r.push_str(dep);
-              r.push_str("\n");
+                r.push_str(dep);
+                r.push_str("\n");
             } else {
-              r.push_str(dep);
-              r.push_str("=\"*\"\n");
+                r.push_str(dep);
+                r.push_str("=\"*\"\n");
             }
         }
 
-        Ok(toml::from_str(&r)
-            .map_err(|_| "could not parse embedded manifest")?)
+        Ok(toml::from_str(&r).map_err(|_| "could not parse embedded manifest")?)
     }
 }
 
@@ -369,8 +386,7 @@ Locates a manifest embedded in Rust source.
 Returns `Some((manifest, source))` if it finds a manifest, `None` otherwise.
 */
 fn find_embedded_manifest(s: &str) -> Option<(Manifest, &str)> {
-    find_short_comment_manifest(s)
-        .or_else(|| find_code_block_manifest(s))
+    find_short_comment_manifest(s).or_else(|| find_code_block_manifest(s))
 }
 
 #[test]
@@ -381,125 +397,140 @@ fn test_find_embedded_manifest() {
 
     assert_eq!(fem("fn main() {}"), None);
 
-    assert_eq!(fem(
-"
+    assert_eq!(
+        fem("
 fn main() {}
 "),
-    None);
+        None
+    );
 
     // Ensure removed prefix manifests don't work.
-    assert_eq!(fem(
-r#"
+    assert_eq!(
+        fem(r#"
 ---
 fn main() {}
 "#),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-"[dependencies]
+    assert_eq!(
+        fem("[dependencies]
 time = \"0.1.25\"
 ---
 fn main() {}
 "),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-"[dependencies]
+    assert_eq!(
+        fem("[dependencies]
 time = \"0.1.25\"
 
 fn main() {}
 "),
-    None);
+        None
+    );
 
     // Make sure we aren't just grabbing the *last* line.
-    assert_eq!(fem(
-"[dependencies]
+    assert_eq!(
+        fem("[dependencies]
 time = \"0.1.25\"
 
 fn main() {
     println!(\"Hi!\");
 }
 "),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-"// cargo-deps: time=\"0.1.25\"
+    assert_eq!(
+        fem("// cargo-deps: time=\"0.1.25\"
 fn main() {}
 "),
-    Some((
-DepList(" time=\"0.1.25\""),
-"// cargo-deps: time=\"0.1.25\"
+        Some((
+            DepList(" time=\"0.1.25\""),
+            "// cargo-deps: time=\"0.1.25\"
 fn main() {}
 "
-    )));
+        ))
+    );
 
-    assert_eq!(fem(
-"// cargo-deps: time=\"0.1.25\", libc=\"0.2.5\"
+    assert_eq!(
+        fem("// cargo-deps: time=\"0.1.25\", libc=\"0.2.5\"
 fn main() {}
 "),
-    Some((
-DepList(" time=\"0.1.25\", libc=\"0.2.5\""),
-"// cargo-deps: time=\"0.1.25\", libc=\"0.2.5\"
+        Some((
+            DepList(" time=\"0.1.25\", libc=\"0.2.5\""),
+            "// cargo-deps: time=\"0.1.25\", libc=\"0.2.5\"
 fn main() {}
 "
-    )));
+        ))
+    );
 
-    assert_eq!(fem(
-"
+    assert_eq!(
+        fem("
   // cargo-deps: time=\"0.1.25\"  \n\
 fn main() {}
 "),
-    Some((
-DepList(" time=\"0.1.25\"  "),
-"
+        Some((
+            DepList(" time=\"0.1.25\"  "),
+            "
   // cargo-deps: time=\"0.1.25\"  \n\
 fn main() {}
 "
-    )));
+        ))
+    );
 
-    assert_eq!(fem(
-"/* cargo-deps: time=\"0.1.25\" */
+    assert_eq!(
+        fem("/* cargo-deps: time=\"0.1.25\" */
 fn main() {}
 "),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-r#"//! [dependencies]
+    assert_eq!(
+        fem(r#"//! [dependencies]
 //! time = "0.1.25"
 fn main() {}
 "#),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-r#"//! ```Cargo
+    assert_eq!(
+        fem(r#"//! ```Cargo
 //! [dependencies]
 //! time = "0.1.25"
 //! ```
 fn main() {}
 "#),
-    Some((
-TomlOwned(r#"[dependencies]
+        Some((
+            TomlOwned(
+                r#"[dependencies]
 time = "0.1.25"
-"#.into()),
-r#"//! ```Cargo
+"#
+                .into()
+            ),
+            r#"//! ```Cargo
 //! [dependencies]
 //! time = "0.1.25"
 //! ```
 fn main() {}
 "#
-    )));
+        ))
+    );
 
-    assert_eq!(fem(
-r#"/*!
+    assert_eq!(
+        fem(r#"/*!
 [dependencies]
 time = "0.1.25"
 */
 fn main() {}
 "#),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-r#"/*!
+    assert_eq!(
+        fem(r#"/*!
 ```Cargo
 [dependencies]
 time = "0.1.25"
@@ -507,11 +538,14 @@ time = "0.1.25"
 */
 fn main() {}
 "#),
-    Some((
-TomlOwned(r#"[dependencies]
+        Some((
+            TomlOwned(
+                r#"[dependencies]
 time = "0.1.25"
-"#.into()),
-r#"/*!
+"#
+                .into()
+            ),
+            r#"/*!
 ```Cargo
 [dependencies]
 time = "0.1.25"
@@ -519,19 +553,21 @@ time = "0.1.25"
 */
 fn main() {}
 "#
-    )));
+        ))
+    );
 
-    assert_eq!(fem(
-r#"/*!
+    assert_eq!(
+        fem(r#"/*!
  * [dependencies]
  * time = "0.1.25"
  */
 fn main() {}
 "#),
-    None);
+        None
+    );
 
-    assert_eq!(fem(
-r#"/*!
+    assert_eq!(
+        fem(r#"/*!
  * ```Cargo
  * [dependencies]
  * time = "0.1.25"
@@ -539,11 +575,14 @@ r#"/*!
  */
 fn main() {}
 "#),
-    Some((
-TomlOwned(r#"[dependencies]
+        Some((
+            TomlOwned(
+                r#"[dependencies]
 time = "0.1.25"
-"#.into()),
-r#"/*!
+"#
+                .into()
+            ),
+            r#"/*!
  * ```Cargo
  * [dependencies]
  * time = "0.1.25"
@@ -551,7 +590,8 @@ r#"/*!
  */
 fn main() {}
 "#
-    )));
+        ))
+    );
 }
 
 /**
@@ -564,7 +604,7 @@ fn find_short_comment_manifest(s: &str) -> Option<(Manifest, &str)> {
     let re = &*RE_SHORT_MANIFEST;
     if let Some(cap) = re.captures(s) {
         if let Some(m) = cap.get(1) {
-            return Some((Manifest::DepList(m.as_str()), &s[..]))
+            return Some((Manifest::DepList(m.as_str()), &s[..]));
         }
     }
     None
@@ -586,66 +626,80 @@ fn find_code_block_manifest(s: &str) -> Option<(Manifest, &str)> {
     let start = match RE_CRATE_COMMENT.captures(s) {
         Some(cap) => match cap.get(1) {
             Some(m) => m.start(),
-            None => return None
+            None => return None,
         },
-        None => return None
+        None => return None,
     };
 
     let comment = match extract_comment(&s[start..]) {
         Ok(s) => s,
         Err(err) => {
             error!("error slicing comment: {}", err);
-            return None
+            return None;
         }
     };
 
-    scrape_markdown_manifest(&comment)
-        .map(|m| (Manifest::TomlOwned(m), s))
+    scrape_markdown_manifest(&comment).map(|m| (Manifest::TomlOwned(m), s))
 }
 
 /**
 Extracts the first `Cargo` fenced code block from a chunk of Markdown.
 */
 fn scrape_markdown_manifest(content: &str) -> Option<String> {
-  // To match `librustdoc/html/markdown.rs` `opts`.
-  let exts = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES;
+    // To match `librustdoc/html/markdown.rs` `opts`.
+    let exts = Options::ENABLE_TABLES | Options::ENABLE_FOOTNOTES;
 
-  let md = Parser::new_ext(&content, exts);
+    let md = Parser::new_ext(&content, exts);
 
-  let mut it = md.skip_while(|e| if let Event::Start(Tag::CodeBlock(ref info)) = e {
-    info.to_lowercase() != "cargo"
-  } else {
-    true
-  });
+    let mut it = md.skip_while(|e| {
+        if let Event::Start(Tag::CodeBlock(ref info)) = e {
+            info.to_lowercase() != "cargo"
+        } else {
+            true
+        }
+    });
 
-  it.next()?;
+    it.next()?;
 
-  let s = it.take_while(|e| if let Event::End(Tag::CodeBlock(_)) = e { false } else { true})
-  .filter_map(|e| if let Event::Text(text) = e {
-    Some(text.into_string())
-  } else {
-    None
-  })
-  .collect::<String>();
+    let s = it
+        .take_while(|e| {
+            if let Event::End(Tag::CodeBlock(_)) = e {
+                false
+            } else {
+                true
+            }
+        })
+        .filter_map(|e| {
+            if let Event::Text(text) = e {
+                Some(text.into_string())
+            } else {
+                None
+            }
+        })
+        .collect::<String>();
 
-  Some(s)
+    Some(s)
 }
 
 #[test]
 fn test_scrape_markdown_manifest() {
     macro_rules! smm {
-        ($c:expr) => (scrape_markdown_manifest($c));
+        ($c:expr) => {
+            scrape_markdown_manifest($c)
+        };
     }
 
-    assert_eq!(smm!(
-r#"There is no manifest in this comment.
+    assert_eq!(
+        smm!(
+            r#"There is no manifest in this comment.
 "#
         ),
-None
+        None
     );
 
-    assert_eq!(smm!(
-r#"There is no manifest in this comment.
+    assert_eq!(
+        smm!(
+            r#"There is no manifest in this comment.
 
 ```
 This is not a manifest.
@@ -658,23 +712,28 @@ println!("Nor is this.");
     Or this.
 "#
         ),
-None
+        None
     );
 
-    assert_eq!(smm!(
-r#"This is a manifest:
+    assert_eq!(
+        smm!(
+            r#"This is a manifest:
 
 ```cargo
 dependencies = { time = "*" }
 ```
 "#
         ),
-Some(r#"dependencies = { time = "*" }
-"#.into())
+        Some(
+            r#"dependencies = { time = "*" }
+"#
+            .into()
+        )
     );
 
-    assert_eq!(smm!(
-r#"This is *not* a manifest:
+    assert_eq!(
+        smm!(
+            r#"This is *not* a manifest:
 
 ```
 He's lying, I'm *totally* a manifest!
@@ -687,12 +746,16 @@ dependencies = { time = "*" }
 ```
 "#
         ),
-Some(r#"dependencies = { time = "*" }
-"#.into())
+        Some(
+            r#"dependencies = { time = "*" }
+"#
+            .into()
+        )
     );
 
-    assert_eq!(smm!(
-r#"This is a manifest:
+    assert_eq!(
+        smm!(
+            r#"This is a manifest:
 
 ```cargo
 dependencies = { time = "*" }
@@ -705,8 +768,11 @@ dependencies = { explode = true }
 ```
 "#
         ),
-Some(r#"dependencies = { time = "*" }
-"#.into())
+        Some(
+            r#"dependencies = { time = "*" }
+"#
+            .into()
+        )
     );
 }
 
@@ -718,7 +784,7 @@ fn extract_comment(s: &str) -> Result<String> {
 
     fn n_leading_spaces(s: &str, n: usize) -> Result<()> {
         if !s.chars().take(n).all(|c| c == ' ') {
-            return Err(format!("leading {:?} chars aren't all spaces: {:?}", n, s).into())
+            return Err(format!("leading {:?} chars aren't all spaces: {:?}", n, s).into());
         }
         Ok(())
     }
@@ -746,46 +812,45 @@ fn extract_comment(s: &str) -> Result<String> {
         let mut depth: u32 = 1;
 
         for line in s.lines() {
-            if depth == 0 { break }
+            if depth == 0 {
+                break;
+            }
 
             // Update nesting and look for end-of-comment.
             let mut end_of_comment = None;
 
-            for (end, marker) in {
-                nesting_re.find_iter(line)
-                    .map(|m| (m.start(), m.as_str()))
-            } {
+            for (end, marker) in { nesting_re.find_iter(line).map(|m| (m.start(), m.as_str())) } {
                 match (marker, depth) {
                     ("/*", _) => depth += 1,
                     ("*/", 1) => {
                         end_of_comment = Some(end);
                         depth = 0;
                         break;
-                    },
+                    }
                     ("*/", _) => depth -= 1,
-                    _ => panic!("got a comment marker other than /* or */")
+                    _ => panic!("got a comment marker other than /* or */"),
                 }
             }
 
             let line = end_of_comment.map(|end| &line[..end]).unwrap_or(line);
 
             // Detect and strip margin.
-            margin = margin
-                .or_else(|| margin_re.find(line)
-                    .map(|m| m.as_str()));
+            margin = margin.or_else(|| margin_re.find(line).map(|m| m.as_str()));
 
             let line = if let Some(margin) = margin {
-                let end = line.char_indices().take(margin.len())
-                    .map(|(i,c)| i + c.len_utf8()).last().unwrap_or(0);
+                let end = line
+                    .char_indices()
+                    .take(margin.len())
+                    .map(|(i, c)| i + c.len_utf8())
+                    .last()
+                    .unwrap_or(0);
                 &line[end..]
             } else {
                 line
             };
 
             // Detect and strip leading indentation.
-            leading_space = leading_space
-                .or_else(|| space_re.find(line)
-                    .map(|m| m.end()));
+            leading_space = leading_space.or_else(|| space_re.find(line).map(|m| m.end()));
 
             /*
             Make sure we have only leading spaces.
@@ -821,14 +886,16 @@ fn extract_comment(s: &str) -> Result<String> {
             // Strip leading comment marker.
             let content = match comment_re.find(line) {
                 Some(m) => &line[m.end()..],
-                None => break
+                None => break,
             };
 
             // Detect and strip leading indentation.
-            leading_space = leading_space
-                .or_else(|| space_re.captures(content)
+            leading_space = leading_space.or_else(|| {
+                space_re
+                    .captures(content)
                     .and_then(|c| c.get(1))
-                    .map(|m| m.end()));
+                    .map(|m| m.end())
+            });
 
             /*
             Make sure we have only leading spaces.
@@ -864,17 +931,15 @@ fn extract_comment(s: &str) -> Result<String> {
 #[test]
 fn test_extract_comment() {
     macro_rules! ec {
-        ($s:expr) => (extract_comment($s).map_err(|e| e.to_string()))
+        ($s:expr) => {
+            extract_comment($s).map_err(|e| e.to_string())
+        };
     }
 
-    assert_eq!(ec!(
-r#"fn main () {}"#
-        ),
-Err("no doc comment found".into())
-    );
+    assert_eq!(ec!(r#"fn main () {}"#), Err("no doc comment found".into()));
 
-    assert_eq!(ec!(
-r#"/*!
+    assert_eq!(
+        ec!(r#"/*!
 Here is a manifest:
 
 ```cargo
@@ -883,9 +948,8 @@ time = "*"
 ```
 */
 fn main() {}
-"#
-        ),
-Ok(r#"
+"#),
+        Ok(r#"
 Here is a manifest:
 
 ```cargo
@@ -893,11 +957,12 @@ Here is a manifest:
 time = "*"
 ```
 
-"#.into())
+"#
+        .into())
     );
 
-    assert_eq!(ec!(
-r#"/*!
+    assert_eq!(
+        ec!(r#"/*!
  * Here is a manifest:
  *
  * ```cargo
@@ -906,9 +971,8 @@ r#"/*!
  * ```
  */
 fn main() {}
-"#
-        ),
-Ok(r#"
+"#),
+        Ok(r#"
 Here is a manifest:
 
 ```cargo
@@ -916,26 +980,27 @@ Here is a manifest:
 time = "*"
 ```
 
-"#.into())
+"#
+        .into())
     );
 
-    assert_eq!(ec!(
-r#"//! Here is a manifest:
+    assert_eq!(
+        ec!(r#"//! Here is a manifest:
 //!
 //! ```cargo
 //! [dependencies]
 //! time = "*"
 //! ```
 fn main() {}
-"#
-        ),
-Ok(r#"Here is a manifest:
+"#),
+        Ok(r#"Here is a manifest:
 
 ```cargo
 [dependencies]
 time = "*"
 ```
-"#.into())
+"#
+        .into())
     );
 }
 
@@ -948,10 +1013,12 @@ fn default_manifest(input: &Input) -> Result<toml::value::Table> {
         let mut subs = HashMap::with_capacity(2);
         subs.insert("name", &*pkg_name);
         subs.insert("file", &input.safe_name()[..]);
-        templates::expand(include_str!("templates/default_manifest.toml").trim_end(), &subs)?
+        templates::expand(
+            include_str!("templates/default_manifest.toml").trim_end(),
+            &subs,
+        )?
     };
-    toml::from_str(&mani_str)
-        .map_err(|_| "could not parse default manifest, somehow".into())
+    toml::from_str(&mani_str).map_err(|_| "could not parse default manifest, somehow".into())
 }
 
 /**
@@ -973,8 +1040,7 @@ fn deps_manifest(deps: &[(String, String)]) -> Result<toml::value::Table> {
         mani_str.push_str("\n");
     }
 
-    toml::from_str(&mani_str)
-        .map_err(|_| "could not parse dependency manifest".into())
+    toml::from_str(&mani_str).map_err(|_| "could not parse dependency manifest".into())
 }
 
 /**
@@ -982,7 +1048,10 @@ Given two Cargo manifests, merges the second *into* the first.
 
 Note that the "merge" in this case is relatively simple: only *top-level* tables are actually merged; everything else is just outright replaced.
 */
-fn merge_manifest(mut into_t: toml::value::Table, from_t: toml::value::Table) -> Result<toml::value::Table> {
+fn merge_manifest(
+    mut into_t: toml::value::Table,
+    from_t: toml::value::Table,
+) -> Result<toml::value::Table> {
     for (k, v) in from_t {
         match v {
             toml::Value::Table(from_t) => {
@@ -992,19 +1061,21 @@ fn merge_manifest(mut into_t: toml::value::Table, from_t: toml::value::Table) ->
                 match into_t.entry(k) {
                     Vacant(e) => {
                         e.insert(toml::Value::Table(from_t));
-                    },
+                    }
                     Occupied(e) => {
-                        let into_t = as_table_mut(e.into_mut())
-                            .ok_or((Blame::Human, "cannot merge manifests: cannot merge \
-                                table and non-table values"))?;
+                        let into_t = as_table_mut(e.into_mut()).ok_or((
+                            Blame::Human,
+                            "cannot merge manifests: cannot merge \
+                             table and non-table values",
+                        ))?;
                         into_t.extend(from_t);
                     }
                 }
-            },
+            }
             v => {
                 // Just replace.
                 into_t.insert(k, v);
-            },
+            }
         }
     }
 
@@ -1013,7 +1084,7 @@ fn merge_manifest(mut into_t: toml::value::Table, from_t: toml::value::Table) ->
     fn as_table_mut(t: &mut toml::Value) -> Option<&mut toml::value::Table> {
         match *t {
             toml::Value::Table(ref mut t) => Some(t),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -1036,11 +1107,11 @@ fn fix_manifest_paths(mani: toml::value::Table, base: &Path) -> Result<toml::val
     for path in paths {
         iterate_toml_mut_path(&mut mani, path, &mut |v| {
             if let toml::Value::String(ref mut s) = *v {
-              if Path::new(s).is_relative() {
-                  if let Some(p) = base.join(&*s).to_str() {
-                    *s = p.into();
-                  }
-              }
+                if Path::new(s).is_relative() {
+                    if let Some(p) = base.join(&*s).to_str() {
+                        *s = p.into();
+                    }
+                }
             }
             Ok(())
         })?
@@ -1056,7 +1127,9 @@ fn fix_manifest_paths(mani: toml::value::Table, base: &Path) -> Result<toml::val
 Iterates over the specified TOML values via a path specification.
 */
 fn iterate_toml_mut_path<F>(base: &mut toml::Value, path: &[&str], on_each: &mut F) -> Result<()>
-where F: FnMut(&mut toml::Value) -> Result<()> {
+where
+    F: FnMut(&mut toml::Value) -> Result<()>,
+{
     if path.is_empty() {
         return on_each(base);
     }
@@ -1065,15 +1138,15 @@ where F: FnMut(&mut toml::Value) -> Result<()> {
     let tail = &path[1..];
 
     if cur == "*" {
-      if let toml::Value::Table(ref mut tab) = *base {
-        for (_, v) in tab.iter_mut() {
+        if let toml::Value::Table(ref mut tab) = *base {
+            for (_, v) in tab.iter_mut() {
+                iterate_toml_mut_path(v, tail, on_each)?;
+            }
+        }
+    } else if let toml::Value::Table(ref mut tab) = *base {
+        if let Some(v) = tab.get_mut(cur) {
             iterate_toml_mut_path(v, tail, on_each)?;
         }
-      }
-    } else if let toml::Value::Table(ref mut tab) = *base {
-      if let Some(v) = tab.get_mut(cur) {
-        iterate_toml_mut_path(v, tail, on_each)?;
-      }
     }
 
     Ok(())

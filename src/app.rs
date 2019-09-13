@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use clap::{App, Arg, ArgGroup, ArgMatches, SubCommand, AppSettings};
+use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches, SubCommand};
 use dirs;
 
 use crate::templates;
@@ -10,24 +10,24 @@ const NAME: &str = "cargo-eval";
 
 #[inline(always)]
 const fn name() -> &'static str {
-  NAME
+    NAME
 }
 
 #[inline(always)]
 fn subcommand_name() -> &'static str {
-  &name()[6..]
+    &name()[6..]
 }
 
 pub fn data_dir() -> Option<PathBuf> {
-  Some(dirs::data_local_dir()?.join(name()))
+    Some(dirs::data_local_dir()?.join(name()))
 }
 
 pub fn cache_dir() -> Option<PathBuf> {
-  Some(dirs::cache_dir()?.join(name()))
+    Some(dirs::cache_dir()?.join(name()))
 }
 
 fn app() -> App<'static, 'static> {
-  let mut app = SubCommand::with_name(subcommand_name())
+    let mut app = SubCommand::with_name(subcommand_name())
     .version(env!("CARGO_PKG_VERSION"))
     .about("Compiles and runs “Cargoified Rust scripts”.")
     .usage("cargo eval [FLAGS OPTIONS] [--] <script> <args>...")
@@ -152,30 +152,33 @@ fn app() -> App<'static, 'static> {
         .requires("expr")
     );
 
-  #[cfg(windows)] {
-    app = app.subcommand(crate::file_assoc::Args::subcommand())
-  }
+    #[cfg(windows)]
+    {
+        app = app.subcommand(crate::file_assoc::Args::subcommand())
+    }
 
-  app = app.subcommand(templates::Args::subcommand());
+    app = app.subcommand(templates::Args::subcommand());
 
-  app
+    app
 }
 
 pub fn get_matches() -> ArgMatches<'static> {
-  let mut args = env::args().collect::<Vec<_>>();
+    let mut args = env::args().collect::<Vec<_>>();
 
-  let subcommand = app();
+    let subcommand = app();
 
-  // Insert subcommand argument if called directly.
-  if args.get(1).map(|s| *s == subcommand_name()) != Some(true) {
-    args.insert(1, subcommand_name().into());
-  }
+    // Insert subcommand argument if called directly.
+    if args.get(1).map(|s| *s == subcommand_name()) != Some(true) {
+        args.insert(1, subcommand_name().into());
+    }
 
-  // We have to wrap our command for the output to look right.
-  App::new("cargo")
-    .bin_name("cargo")
-    .setting(AppSettings::SubcommandRequiredElseHelp)
-    .subcommand(subcommand)
-    .get_matches_from(args)
-    .subcommand_matches(subcommand_name()).unwrap().clone()
+    // We have to wrap our command for the output to look right.
+    App::new("cargo")
+        .bin_name("cargo")
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(subcommand)
+        .get_matches_from(args)
+        .subcommand_matches(subcommand_name())
+        .unwrap()
+        .clone()
 }

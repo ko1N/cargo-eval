@@ -3,7 +3,8 @@ fn test_expr_0() {
     let out = cargo_eval!("-e", with_output_marker!("0")).unwrap();
     scan!(out.stdout_output();
         ("0") => ()
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]
@@ -11,7 +12,8 @@ fn test_expr_comma() {
     let out = cargo_eval!("-e", with_output_marker!("[1, 2, 3]")).unwrap();
     scan!(out.stdout_output();
         ("[1, 2, 3]") => ()
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]
@@ -28,14 +30,20 @@ fn test_expr_temporary() {
 
 #[test]
 fn test_expr_dep() {
-    let out = cargo_eval!("-d", "boolinator=0.1.0",
-        "-e", with_output_marker!(
+    let out = cargo_eval!(
+        "-d",
+        "boolinator=0.1.0",
+        "-e",
+        with_output_marker!(
             prelude "use boolinator::Boolinator;";
             "true.as_some(1)"
-        )).unwrap();
+        )
+    )
+    .unwrap();
     scan!(out.stdout_output();
         ("Some(1)") => ()
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 #[test]
@@ -50,7 +58,8 @@ fn test_expr_qmark() {
     let out = cargo_eval!("-e", code).unwrap();
     scan!(out.stdout_output();
         ("43") => ()
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 #[test]
@@ -58,11 +67,16 @@ fn test_expr_template() {
     let template_dir = "tests/data/templates";
     let out = cargo_eval!(
         #[env(CARGO_EVAL_TEMPLATE_DIR=template_dir)]
-        "-t", "shout", "-e", with_output_marker!(r#""no way? no way!""#)
-    ).unwrap();
+        "-t",
+        "shout",
+        "-e",
+        with_output_marker!(r#""no way? no way!""#)
+    )
+    .unwrap();
     scan!(out.stdout_output();
         ("NO WAY? NO WAY!") => ()
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 #[test]
@@ -70,11 +84,16 @@ fn test_expr_template_with_deps() {
     let template_dir = "tests/data/templates";
     let out = cargo_eval!(
         #[env(CARGO_EVAL_TEMPLATE_DIR=template_dir)]
-        "-t", "boolinate", "-e", with_output_marker!(r#"true"#)
-    ).unwrap();
+        "-t",
+        "boolinate",
+        "-e",
+        with_output_marker!(r#"true"#)
+    )
+    .unwrap();
     scan!(out.stdout_output();
         ("Some(())") => ()
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 #[test]
@@ -82,9 +101,12 @@ fn test_expr_template_override_expr() {
     let template_dir = "tests/data/templates/override";
     let out = cargo_eval!(
         #[env(CARGO_EVAL_TEMPLATE_DIR=template_dir)]
-        "-e", with_output_marker!(r#"true"#)
-    ).unwrap();
+        "-e",
+        with_output_marker!(r#"true"#)
+    )
+    .unwrap();
     scan!(out.stdout_output();
         ("Some(())") => ()
-    ).unwrap();
+    )
+    .unwrap();
 }
