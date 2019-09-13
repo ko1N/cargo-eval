@@ -244,11 +244,11 @@ fn try_main() -> Result<i32> {
             Input::File(&script_name, &script_path, &content, mtime)
         },
         (Some(expr), true, false) => {
-            content = expr.into();
+            content = expr.clone().into();
             Input::Expr(&content, args.template.as_ref().map(|s| &**s))
         },
         (Some(loop_), false, true) => {
-            content = loop_.into();
+            content = loop_.clone().into();
             Input::Loop(&content, args.count)
         },
         _ => unreachable!(),
