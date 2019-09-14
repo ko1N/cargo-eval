@@ -6,6 +6,7 @@ env:
   - RUSTFLAGS='-D warnings'
 
 rust:
+  - 1.35.0
   - stable
   - nightly
 
